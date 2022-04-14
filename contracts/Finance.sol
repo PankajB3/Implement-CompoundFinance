@@ -56,14 +56,18 @@ interface CEth {
 contract MyFinance {
     // cEth Rinkweby 0xd6801a1dffcd0a410336ef88def4320d6df1883e
     // comptroller Rinkeby 0x2eaa9d77ae4d8f9cdd9faacd44016e746485bddb
+    address payable private  cETHAddr;
+    address private comptroller;
     address private cDaiAddr = 0x6D7F0754FFeb405d23C51CE938289d4835bE3b14;
     address private daiAddr;
     // 0x5592EC0cfb4dbc12D3aB100b257153436a1f0FEa
     address private cERC20;
     // 0x6D7F0754FFeb405d23C51CE938289d4835bE3b14
-    constructor(address _dai, address _cErc) {
+    constructor(address _dai, address _cErc, address payable _cETH, address _comptroller) {
         daiAddr = _dai;
         cERC20 = _cErc;
+        cETHAddr = _cETH;
+        comptroller = _comptroller;
     }
 
     function mint(uint256 amt) external returns(uint256){
@@ -122,33 +126,33 @@ contract MyFinance {
 
     // BORROW FUNCTIONS
 
-    function borrowETH(uint256 amt, address comptrollerAddr, address payable cETHAddr) external{
+    function borrowETH(uint256 amt) external returns(uint256){
         // 1. after providing dai , & getting cDai
         // 2. we need to enter MArket, to tell compound that I need to borrow
         address[] memory cTokenArr = new address[](1);
         cTokenArr[0] = cERC20;
-        uint256[] memory errCodeArr =  Comptroller(comptrollerAddr).enterMarkets(cTokenArr);
+        uint256[] memory errCodeArr =  Comptroller(comptroller).enterMarkets(cTokenArr);
         // if 0 is not returned that means transaction fails.....
         require(errCodeArr[0]==0,"Failed To Enter The Market");
 
         // Account Liquidity represents the USD value borrowable by a user, before it reaches liquidation.
-        (uint256 err,uint256 liquidity,uint256 shortFall) = Comptroller(comptrollerAddr).getAccountLiquidity(address(this));
+        (uint256 err,uint256 liquidity,uint256 shortFall) = Comptroller(comptroller).getAccountLiquidity(address(this));
 
         require(err==0,"Error occured in getting liquidity");
         require(shortFall == 0, "account underwater");
         require(liquidity > 0, "account has excess collateral");
 
         // get maximum amount which can be borrowed, comptroller.markets
-        (bool isListed, uint256 collateralFactorMantissa) = Comptroller(comptrollerAddr).markets(cERC20);
+        (bool isListed, uint256 collateralFactorMantissa) = Comptroller(comptroller).markets(cERC20);
         require(isListed,"comptroller does not recognizes this cToken");
         // require(isComped,"Not a COMP token");
         require(amt<collateralFactorMantissa,"Amount borrowed should be less");
 
         CEth(cETHAddr).borrow(amt);
 
-        // uint256 borrows = CEth(cETHAddr).borrowBalanceCurrent(address(this));
+        uint256 borrows = CEth(cETHAddr).borrowBalanceCurrent(address(this));
 
-        // return borrows;
+        return borrows;
     }
 
     function checkBorrowedETHBalance() external view returns(uint256){
@@ -156,10 +160,19 @@ contract MyFinance {
         return address(this).balance;
     }
 
-    function borrowBalance(address cETHAddr) external returns(uint256){
-        uint256 borrows = CEth(cETHAddr).borrowBalanceCurrent(address(this));
-        return borrows;
-    }
+    // function borrowBalance() external returns(uint256){
+    //     uint256 borrows = CEth(cETHAddr).borrowBalanceCurrent(address(this));
+    //     return borrows;
+    // }
 
      receive() external payable {}
+
+// REPAY BORROWED ETH
+     function repayEth(uint256 repayAmt) payable external{
+//          msg.value payable: The amount of ether to be repaid, in wei.
+// msg.sender: The account which borrowed the asset, and shall repay the borrow.
+// RETURN: No return, reverts on error.
+         CEth(cETHAddr).repayBorrow{value:repayAmt}();
+     }
+
 }
