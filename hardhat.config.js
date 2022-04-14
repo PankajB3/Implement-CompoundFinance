@@ -29,6 +29,12 @@ module.exports = {
       accounts:
         process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
     },
+    // mainnet: {
+    //   url: process.env.RPCURL,
+    //   accounts: [process.env.DEPLOYER],
+    //   gas: 2100000,
+    //   gasPrice: 25000000000
+    // }
   },
   gasReporter: {
     enabled: process.env.REPORT_GAS !== undefined,
